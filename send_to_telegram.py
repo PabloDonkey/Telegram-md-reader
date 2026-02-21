@@ -146,7 +146,24 @@ def split_message(text, limit=1000):
         if current_message:
             messages.append(current_message)
     
-    return messages
+    return _fix_split_code_blocks(messages)
+
+
+def _fix_split_code_blocks(messages):
+    """Close and reopen code blocks that were split across messages."""
+    in_code_block = False
+    fixed = []
+    for msg in messages:
+        # Count backticks in original message to track state transitions
+        original_count = msg.count('```')
+        if in_code_block:
+            msg = '```\n' + msg
+        if original_count % 2 != 0:
+            in_code_block = not in_code_block
+        if in_code_block:
+            msg = msg + '\n```'
+        fixed.append(msg)
+    return fixed
 
 
 def send_to_telegram(text):
