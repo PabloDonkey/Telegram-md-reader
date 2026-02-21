@@ -75,6 +75,23 @@ python3 send_to_telegram.py --file your_markdown_file.md
 python3 send_to_telegram.py --text "# Hello\n\nThis is **bold** text."
 ```
 
+## Message Splitting
+
+The script automatically splits messages that exceed 2000 characters to ensure readability and avoid hitting Telegram's message size limits (4096 characters max). 
+
+**Splitting strategy:**
+1. First tries to split on paragraph boundaries (`\n\n`) to keep paragraphs intact
+2. Falls back to splitting on line breaks (`\n`) if paragraphs are too long
+3. As a last resort, hard-splits at the character limit if individual lines exceed 2000 chars
+
+When a message is split, each chunk is sent as a separate message with a sequence indicator (e.g., "Message 1/3", "Message 2/3").
+
+**Example:**
+```bash
+# This long markdown will be automatically split and sent as multiple messages
+python3 send_to_telegram.py --file very_long_document.md
+```
+
 ## Integration with GitHub Copilot
 
 ### Copy the skill file

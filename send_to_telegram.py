@@ -7,6 +7,7 @@ Converts Markdown to Telegram-safe text and sends via bot API.
 import argparse
 import sys
 import os
+import asyncio
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -47,8 +48,66 @@ def convert_to_telegram_markdown(text):
         sys.exit(1)
 
 
+def split_message(text, limit=2000):
+    """
+    Split message intelligently at paragraph boundaries.
+    
+    Args:
+        text: The message text to split
+        limit: Character limit per message (default: 2000)
+    
+    Returns:
+        List of message chunks
+    """
+    if len(text) <= limit:
+        return [text]
+    
+    messages = []
+    
+    # Try splitting on paragraph boundaries (double newline)
+    paragraphs = text.split('\n\n')
+    current_message = ""
+    
+    for paragraph in paragraphs:
+        # Check if adding this paragraph exceeds limit
+        test_message = current_message + ('\n\n' if current_message else '') + paragraph
+        
+        if len(test_message) <= limit:
+            current_message = test_message
+        else:
+            # Paragraph itself is too long, try splitting by lines
+            if current_message:
+                messages.append(current_message)
+                current_message = ""
+            
+            # Split paragraph by lines
+            lines = paragraph.split('\n')
+            for line in lines:
+                test_message = current_message + ('\n' if current_message else '') + line
+                
+                if len(test_message) <= limit:
+                    current_message = test_message
+                else:
+                    # Line itself is too long, hard split it
+                    if current_message:
+                        messages.append(current_message)
+                        current_message = ""
+                    
+                    # Hard split the long line
+                    while len(line) > limit:
+                        messages.append(line[:limit])
+                        line = line[limit:]
+                    
+                    current_message = line
+    
+    if current_message:
+        messages.append(current_message)
+    
+    return messages
+
+
 def send_to_telegram(text):
-    """Send text to Telegram bot."""
+    """Send text to Telegram bot, splitting into multiple messages if needed."""
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not set in environment or .env file.", file=sys.stderr)
         sys.exit(1)
@@ -56,17 +115,32 @@ def send_to_telegram(text):
         print("Error: CHAT_ID not set in environment or .env file.", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        bot = Bot(token=BOT_TOKEN)
-        message = bot.send_message(
-            chat_id=CHAT_ID,
-            text=text,
-            parse_mode="MarkdownV2"
-        )
-        print(f"✓ Message sent successfully. Message ID: {message.message_id}")
-    except TelegramError as e:
-        print(f"Error sending message to Telegram: {e}", file=sys.stderr)
-        sys.exit(1)
+    messages = split_message(text)
+
+    async def send():
+        try:
+            bot = Bot(token=BOT_TOKEN)
+            message_ids = []
+            
+            for i, msg in enumerate(messages, 1):
+                message = await bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=msg,
+                    parse_mode="MarkdownV2"
+                )
+                message_ids.append(message.message_id)
+                if len(messages) > 1:
+                    print(f"✓ Message {i}/{len(messages)} sent successfully. Message ID: {message.message_id}")
+                else:
+                    print(f"✓ Message sent successfully. Message ID: {message.message_id}")
+            
+            if len(messages) > 1:
+                print(f"✓ All {len(messages)} messages sent successfully.")
+        except TelegramError as e:
+            print(f"Error sending message to Telegram: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    asyncio.run(send())
 
 
 def main():
