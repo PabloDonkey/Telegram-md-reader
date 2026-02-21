@@ -1,0 +1,19 @@
+name: send_to_telegram
+description: Send Markdown content to your Telegram chat using telegramify-markdown
+version: 1.0.0
+
+# How the skill is invoked
+command:
+  cmd: python3
+  args:
+    - send_to_telegram.py
+  stdin: true
+
+# Metadata
+metadata:
+  author: User
+  tags:
+    - telegram
+    - markdown
+    - integration
+  category: messaging
