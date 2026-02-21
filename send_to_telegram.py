@@ -48,13 +48,13 @@ def convert_to_telegram_markdown(text):
         sys.exit(1)
 
 
-def split_message(text, limit=2000):
+def split_message(text, limit=1000):
     """
-    Split message intelligently at paragraph boundaries.
+    Split message intelligently with priority: markdown titles > paragraphs > lines > hard split.
     
     Args:
         text: The message text to split
-        limit: Character limit per message (default: 2000)
+        limit: Character limit per message (default: 1000)
     
     Returns:
         List of message chunks
@@ -64,44 +64,87 @@ def split_message(text, limit=2000):
     
     messages = []
     
-    # Try splitting on paragraph boundaries (double newline)
-    paragraphs = text.split('\n\n')
-    current_message = ""
+    # Split by markdown titles (lines starting with # or ##, etc.)
+    import re
+    title_pattern = r'^(#{1,6}\s+.*)$'
     
-    for paragraph in paragraphs:
-        # Check if adding this paragraph exceeds limit
-        test_message = current_message + ('\n\n' if current_message else '') + paragraph
-        
-        if len(test_message) <= limit:
-            current_message = test_message
+    # Split text while keeping title markers
+    lines_split = text.split('\n')
+    sections = []
+    current_section = []
+    
+    for line in lines_split:
+        if re.match(title_pattern, line) and current_section:
+            # Found a title and we have accumulated content - save current section and start new with title
+            sections.append('\n'.join(current_section))
+            current_section = [line]
         else:
-            # Paragraph itself is too long, try splitting by lines
-            if current_message:
-                messages.append(current_message)
-                current_message = ""
-            
-            # Split paragraph by lines
-            lines = paragraph.split('\n')
-            for line in lines:
-                test_message = current_message + ('\n' if current_message else '') + line
-                
-                if len(test_message) <= limit:
-                    current_message = test_message
-                else:
-                    # Line itself is too long, hard split it
-                    if current_message:
-                        messages.append(current_message)
-                        current_message = ""
-                    
-                    # Hard split the long line
-                    while len(line) > limit:
-                        messages.append(line[:limit])
-                        line = line[limit:]
-                    
-                    current_message = line
+            current_section.append(line)
     
-    if current_message:
-        messages.append(current_message)
+    if current_section:
+        sections.append('\n'.join(current_section))
+    
+    # Process each section
+    for section in sections:
+        # Try splitting on paragraph boundaries (double newline)
+        paragraphs = section.split('\n\n')
+        current_message = ""
+        
+        for paragraph in paragraphs:
+            # Check if adding this paragraph exceeds limit
+            test_message = current_message + ('\n\n' if current_message else '') + paragraph
+            
+            if len(test_message) <= limit:
+                current_message = test_message
+            else:
+                # If current_message is empty and single paragraph exceeds limit, we must split it
+                if not current_message:
+                    # Split paragraph by lines
+                    lines = paragraph.split('\n')
+                    for line in lines:
+                        test_message = current_message + ('\n' if current_message else '') + line
+                        
+                        if len(test_message) <= limit:
+                            current_message = test_message
+                        else:
+                            # Line itself is too long, hard split it
+                            if current_message:
+                                messages.append(current_message)
+                                current_message = ""
+                            
+                            # Hard split the long line
+                            while len(line) > limit:
+                                messages.append(line[:limit])
+                                line = line[limit:]
+                            
+                            current_message = line
+                else:
+                    # Save current message and process paragraph
+                    messages.append(current_message)
+                    current_message = ""
+                    
+                    # Split paragraph by lines
+                    lines = paragraph.split('\n')
+                    for line in lines:
+                        test_message = current_message + ('\n' if current_message else '') + line
+                        
+                        if len(test_message) <= limit:
+                            current_message = test_message
+                        else:
+                            # Line itself is too long, hard split it
+                            if current_message:
+                                messages.append(current_message)
+                                current_message = ""
+                            
+                            # Hard split the long line
+                            while len(line) > limit:
+                                messages.append(line[:limit])
+                                line = line[limit:]
+                            
+                            current_message = line
+        
+        if current_message:
+            messages.append(current_message)
     
     return messages
 
